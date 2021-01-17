@@ -10,6 +10,8 @@ namespace SkImageResizer
 {
     public class SKImageProcess
     {
+        static readonly CancellationTokenSource cts = new CancellationTokenSource();
+
         /// <summary>
         /// 進行圖片的縮放作業
         /// </summary>
@@ -33,8 +35,8 @@ namespace SkImageResizer
                 var sourceWidth = imgPhoto.Width;
                 var sourceHeight = imgPhoto.Height;
 
-                var destinationWidth = (int)(sourceWidth * scale);
-                var destinationHeight = (int)(sourceHeight * scale);
+                var destinationWidth = (int) (sourceWidth * scale);
+                var destinationHeight = (int) (sourceHeight * scale);
 
                 using var scaledBitmap = bitmap.Resize(
                     new SKImageInfo(destinationWidth, destinationHeight),
@@ -68,8 +70,8 @@ namespace SkImageResizer
                     var sourceWidth = imgPhoto.Width;
                     var sourceHeight = imgPhoto.Height;
 
-                    var destinationWidth = (int)(sourceWidth * scale);
-                    var destinationHeight = (int)(sourceHeight * scale);
+                    var destinationWidth = (int) (sourceWidth * scale);
+                    var destinationHeight = (int) (sourceHeight * scale);
 
                     // using var scaledBitmap = bitmap.Resize(
                     //                                   new SKImageInfo(destinationWidth, destinationHeight),
@@ -82,8 +84,8 @@ namespace SkImageResizer
                     Task.Run(() =>
                     {
                         using var scaledBitmap = bitmap.Resize(
-                                  new SKImageInfo(destinationWidth, destinationHeight),
-                                  SKFilterQuality.High);
+                            new SKImageInfo(destinationWidth, destinationHeight),
+                            SKFilterQuality.High);
                         using var scaledImage = SKImage.FromBitmap(scaledBitmap);
                         using var data = scaledImage.Encode(SKEncodedImageFormat.Jpeg, 100);
                         using var s = File.OpenWrite(Path.Combine(destPath, imgName + ".jpg"));
@@ -92,7 +94,23 @@ namespace SkImageResizer
                 }));
 
             }
-            await Task.WhenAll(task);
+
+            Console.CancelKeyPress += Console_CancelKeyPress;
+
+            try
+            {
+                await Task.Run(() => Task.WhenAll(task), cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine($"{Environment.NewLine}下載已經取消");
+                Clean(destPath);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"{Environment.NewLine}發現例外異常 {ex.Message}");
+            }
+            // await Task.WhenAll(task);
         }
 
         /// <summary>
@@ -128,6 +146,13 @@ namespace SkImageResizer
             files.AddRange(Directory.GetFiles(srcPath, "*.jpg", SearchOption.AllDirectories));
             files.AddRange(Directory.GetFiles(srcPath, "*.jpeg", SearchOption.AllDirectories));
             return files;
+        }
+
+        static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
+        {
+            cts.Cancel();
+
+            e.Cancel = true;
         }
     }
 }
